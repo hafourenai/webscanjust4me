@@ -31,6 +31,7 @@
 
 ## Instalasi & Penggunaan
 
+```bash
 # Clone repository
 git clone https://github.com/hafourenai/webscanjust4me
 cd webscanjust4me
@@ -40,6 +41,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
 ### Cara Menggunakan
 ```powershell
