@@ -1510,8 +1510,8 @@ class VulnScanner:
         """Load payload database dari folder Payloads/ yang disediakan user."""
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
-        def load_payload_file(relative_path):
-            path = os.path.join(base_dir, relative_path)
+        def load_payload_file(*path_segments):
+            path = os.path.join(base_dir, *path_segments)
             payloads = []
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -1528,21 +1528,21 @@ class VulnScanner:
 
         # === SQLi payloads ===
         self.sqli_payloads = {
-            "boolean_based": load_payload_file(r"Payloads\SQLI\Boolean_Based_SQLi_Payloads.txt"),
-            "error_based": load_payload_file(r"Payloads\SQLI\Error_Based_SQLi_Payloads.txt"),
-            "union_based": load_payload_file(r"Payloads\SQLI\Union_Based_SQLi_Payloads.txt"),
+            "boolean_based": load_payload_file("Payloads", "SQLI", "Boolean_Based_SQLi_Payloads.txt"),
+            "error_based": load_payload_file("Payloads", "SQLI", "Error_Based_SQLi_Payloads.txt"),
+            "union_based": load_payload_file("Payloads", "SQLI", "Union_Based_SQLi_Payloads.txt"),
             "time_based": (
-                load_payload_file(r"Payloads\SQLI\Time_Based_SQLi_Payloads.txt")
-                + load_payload_file(r"Payloads\Time-Based SQLi\Generic Time Based SQL Injection Payloads.txt")
+                load_payload_file("Payloads", "SQLI", "Time_Based_SQLi_Payloads.txt")
+                + load_payload_file("Payloads", "Time-Based SQLi", "Generic Time Based SQL Injection Payloads.txt")
             ),
-            "comment_based": load_payload_file(r"Payloads\SQLI\Comment_Based_SQLi_Payloads.txt"),
-            "dns_exfiltration": load_payload_file(r"Payloads\SQLI\DNS_Exfiltration_SQLi_Payloads.txt"),
-            "hybrid": load_payload_file(r"Payloads\SQLI\Hybrid_SQLi_Payloads.txt"),
-            "oob": load_payload_file(r"Payloads\SQLI\OOB_SQLi_Payloads.txt"),
-            "second_order": load_payload_file(r"Payloads\SQLI\Second_Order_SQLi_Payloads.txt"),
-            "stacked_queries": load_payload_file(r"Payloads\SQLI\Stacked_Queries_SQLi_Payloads.txt"),
-            "stored_procedure": load_payload_file(r"Payloads\SQLI\Stored_Procedure_SQLi_Payloads.txt"),
-            "waf_bypass": load_payload_file(r"Payloads\SQLI\WAF_Bypass_SQLi_Payloads.txt"),
+            "comment_based": load_payload_file("Payloads", "SQLI", "Comment_Based_SQLi_Payloads.txt"),
+            "dns_exfiltration": load_payload_file("Payloads", "SQLI", "DNS_Exfiltration_SQLi_Payloads.txt"),
+            "hybrid": load_payload_file("Payloads", "SQLI", "Hybrid_SQLi_Payloads.txt"),
+            "oob": load_payload_file("Payloads", "SQLI", "OOB_SQLi_Payloads.txt"),
+            "second_order": load_payload_file("Payloads", "SQLI", "Second_Order_SQLi_Payloads.txt"),
+            "stacked_queries": load_payload_file("Payloads", "SQLI", "Stacked_Queries_SQLi_Payloads.txt"),
+            "stored_procedure": load_payload_file("Payloads", "SQLI", "Stored_Procedure_SQLi_Payloads.txt"),
+            "waf_bypass": load_payload_file("Payloads", "SQLI", "WAF_Bypass_SQLi_Payloads.txt"),
         }
 
         # filter kosong / duplikat
@@ -1558,13 +1558,13 @@ class VulnScanner:
                 self.sqli_payloads[k] = uniq
 
         # === XSS payloads === (satu file besar)
-        xss_list = load_payload_file(r"Payloads\XSS\payload.txt")
+        xss_list = load_payload_file("Payloads", "XSS", "payload.txt")
         self.xss_payloads = {
             "basic": xss_list[:200],  # batasi sedikit untuk menghindari terlalu agresif
         }
 
         # === LFI payloads ===
-        self.lfi_payloads = load_payload_file(r"Payloads\LFI\JHADDIX_LFI.txt")[:200]
+        self.lfi_payloads = load_payload_file("Payloads", "LFI", "JHADDIX_LFI.txt")[:200]
         
         self.ssrf_payloads = [
             "http://localhost:22",
