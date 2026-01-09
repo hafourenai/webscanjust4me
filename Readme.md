@@ -26,10 +26,6 @@
 - **Rate Limiting**: Kontrol jumlah request per detik secara presisi.
 - **Smart Block Detection**: Mendeteksi blokir (403, 429, Captcha) dan otomatis menyesuaikan perilaku.
 
-### 3. Behavioral
-- **Baseline Establishing**: Membuat profil respon "normal" dari target untuk mendeteksi anomali.
-- **Differential Analysis**: Membandingkan perbedaan respon secara cerdas (bukan hanya status code, tapi juga struktur dan kemiripan teks).
-- **Automated Verifier**: Melakukan verifikasi otomatis dengan berbagai teknik sebelum melaporkan temuan.
 
 ---
 
