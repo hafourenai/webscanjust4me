@@ -24,15 +24,14 @@
 git clone https://github.com/hafourenai/webscanjust4me
 cd webscanjust4me
 
-<<<<<<< HEAD
 # Install dependencies
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-=======
+
 # Install dependencies (Rekomendasi)
 pip install -e .
->>>>>>> 4462ddb (Last Commit)
+
 ```
 
 ### 2. Cara Menjalankan Scanner
@@ -66,7 +65,6 @@ honey-scanner https://target.com --stealth --rate 0.5
 honey-scanner https://target.com --aggressive --threads 20
 ```
 
-<<<<<<< HEAD
 #### **2. Stealth Scan (Production Sites)**
 ```bash
 python main.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
@@ -109,7 +107,7 @@ python clean.py
 - `--use-tor`: Gunakan jaringan TOR.
 - `--rate`: Batasi request per detik (e.g., `--rate 1.0`).
 =======
->>>>>>> 4462ddb (Last Commit)
+
 
 ---
 
