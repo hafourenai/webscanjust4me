@@ -36,7 +36,7 @@ dependencies = [
 "Bug Tracker" = "https://github.com/hafourenai/webscanjust4me/issues"
 
 [project.scripts]
-honey-scanner = "main:main"
+honey-scanner = "honey_scanner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
