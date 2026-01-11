@@ -18,7 +18,7 @@
 
 ## Instalasi & Penggunaan
 
-### 1. Setup Environment
+### Setup Environment
 ```bash
 # Clone & Masuk direktori
 git clone https://github.com/hafourenai/webscanjust4me
@@ -64,12 +64,11 @@ honey-scanner https://target.com --stealth --rate 0.5
 # Scan agresif dengan banyak thread
 honey-scanner https://target.com --aggressive --threads 20
 ```
-<<<<<<< HEAD
 
 #### **Stealth Scan (Production Sites)**
 =======
 #### **Stealth Scan (Production Sites)**
->>>>>>> da9074c (Last Commit)
+
 ```bash
 python main.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
 ```
@@ -110,7 +109,7 @@ python clean.py
 - `--proxy-file`: Path ke file list proxy.
 - `--use-tor`: Gunakan jaringan TOR.
 - `--rate`: Batasi request per detik (e.g., `--rate 1.0`).
-=======
+
 
 
 ---
