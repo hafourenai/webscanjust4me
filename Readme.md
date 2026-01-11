@@ -24,6 +24,10 @@
 git clone https://github.com/hafourenai/webscanjust4me
 cd webscanjust4me
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> da9074c (Last Commit)
 # Install dependencies
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
@@ -64,17 +68,21 @@ honey-scanner https://target.com --stealth --rate 0.5
 # Scan agresif dengan banyak thread
 honey-scanner https://target.com --aggressive --threads 20
 ```
+<<<<<<< HEAD
 
 #### **2. Stealth Scan (Production Sites)**
+=======
+#### **Stealth Scan (Production Sites)**
+>>>>>>> da9074c (Last Commit)
 ```bash
 python main.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
 ```
 
-#### **3. Scan with Proxy Protection**
+#### **Scan with Proxy Protection**
 ```bash
 python main.py http://target.com --proxy-file proxies.txt --stealth --rate 0.5
 ```
-#### **4. Maximum Anonymity (TOR + Proxies)**
+#### **Maximum Anonymity (TOR + Proxies)**
 ```bash
 # Start TOR
 sudo service tor start
@@ -85,12 +93,12 @@ python main.py http://target.com --proxy-file proxies.txt --use-tor --stealth --
 sudo service tor stop
 ```
 
-#### **5. Aggressive Bug Bounty Scan**
+#### **Aggressive Bug Bounty Scan**
 ```bash
 python main.py http://target.com --aggressive --threads 20 --depth 10 --rate 2.0
 ```
 
-#### **6. High-Value Target (Cloudflare/WAF)**
+#### **High-Value Target (Cloudflare/WAF)**
 ```bash
 python main.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.1 --threads 3 -d 3
 ```
