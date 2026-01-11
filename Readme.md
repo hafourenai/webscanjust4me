@@ -70,7 +70,7 @@ python main.py http://target.com --aggressive --threads 20 --depth 10 --rate 2.0
 ```bash
 python main.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.1 --threads 3 -d 3
 ```
-#### ** Clean **
+#### **Clean**
 ```bash
 python clean.py
 ```
