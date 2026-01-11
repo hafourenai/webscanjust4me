@@ -1,0 +1,32 @@
+# Honey Scanner Configuration
+
+scanning:
+  default_threads: 15
+  default_depth: 5
+  default_rate_limit: 1.0
+  timeout: 10
+  user_agent_randomize: true
+
+payloads:
+  base_path: "Payloads"
+  sqli:
+    boolean: "SQLI/Boolean_Based_SQLi_Payloads.txt"
+    error: "SQLI/Error_Based_SQLi_Payloads.txt"
+    time: "SQLI/Time_Based_SQLi_Payloads.txt"
+    union: "SQLI/Union_Based_SQLi_Payloads.txt"
+    limit_per_type: 50
+  xss:
+    path: "XSS/payload.txt"
+    limit: 100
+  lfi:
+    path: "LFI/JHADDIX_LFI.txt"
+    limit: 50
+
+reporting:
+  formats: ["html", "json", "csv", "markdown", "xml"]
+  output_prefix: "scan_report_"
+
+antiban:
+  tor_proxy: "socks5://127.0.0.1:9050"
+  block_threshold: 5
+  retry_delay: 2

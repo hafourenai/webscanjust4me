@@ -155,25 +155,49 @@ class MLFalsePositiveReducer:
         }
     
     def calculate_confidence(self, vuln_data):
+        # Support both 'type' and 'vuln_type' keys
+        if 'type' not in vuln_data and 'vuln_type' in vuln_data:
+            vuln_data['type'] = vuln_data['vuln_type']
+            
+        # If successfully verified, we are highly confident
+        if vuln_data.get('verified', False):
+            return 0.85
+            
         features = self.extract_features(vuln_data)
         confidence = 0.0
+        
+        # Base confidence from feature analysis
         for feature_name, weight in self.feature_weights.items():
             if feature_name in features:
                 confidence += features[feature_name] * weight
+                
+        # Boost if strong error pattern match
+        if features.get('error_pattern_match', 0) >= 0.6:
+            confidence += 0.3
+            
         pattern_bonus = self.check_pattern_match(vuln_data)
         confidence += pattern_bonus
+            
         return min(max(confidence, 0.0), 1.0)
     
     def extract_features(self, vuln_data):
         features = {}
+        vuln_type = vuln_data.get('type') or vuln_data.get('vuln_type', 'unknown')
+        
         if 'proof' in vuln_data:
-            features['error_pattern_match'] = self.score_error_pattern(str(vuln_data['proof']), vuln_data['type'])
-        if 'time_diff' in vuln_data.get('evidence', {}):
-            features['response_time_anomaly'] = min(vuln_data['evidence']['time_diff'] / 10.0, 1.0)
-        if 'length_diff' in vuln_data.get('evidence', {}):
-            features['content_length_diff'] = min(vuln_data['evidence']['length_diff'] / 1000.0, 1.0)
-        if 'status_code' in vuln_data.get('evidence', {}):
-            features['status_code_change'] = self.score_status_code(vuln_data['evidence']['status_code'])
+            features['error_pattern_match'] = self.score_error_pattern(str(vuln_data['proof']), vuln_type)
+            
+        # Extract evidence features if present
+        evidence = vuln_data.get('evidence', {})
+        if 'time_diff' in evidence:
+            features['response_time_anomaly'] = min(evidence['time_diff'] / 10.0, 1.0)
+        if 'length_diff' in evidence:
+            features['content_length_diff'] = min(evidence['length_diff'] / 1000.0, 1.0)
+        if 'status_code' in evidence:
+            features['status_code_change'] = self.score_status_code(evidence['status_code'])
+        elif 'status_code' in vuln_data: # Direct status code
+            features['status_code_change'] = self.score_status_code(vuln_data['status_code'])
+            
         return features
     
     def score_error_pattern(self, proof, vuln_type):

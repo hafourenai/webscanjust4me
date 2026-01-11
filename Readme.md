@@ -1,46 +1,72 @@
 # 🍯 HONEY Vulnerability Scanner
 
-## Perbaikan
 
--  Advanced WAF Bypass Engine
--  ML False Positive Reducer
 
-## Struktur Project
+## 📁 Struktur Project
 
 ```
-honey_scanner/
-  ├── core/            # Engine utama & fingerprinting
-  ├── detection/       # Analyzer & verifikasi vulnerabilites
-  ├── antiban/         # Proxy & rate limiting
-  ├── reporting/       # Sistem pelaporan multi-format
-  └── main.py          # Entry point utama
+├── honey_scanner/     # Paket modul utama
+│   ├── core/          # Engine (Scanner, Config, WAF Bypass)
+│   ├── detection/     # Verifikasi (SQLi, XSS, LFI, CSRF)
+│   ├── antiban/       # Anti-blocking (Proxy, Tor, Limiter)
+│   └── reporting/     # Multi-format reporter
+├── Payloads/          # Database payload lokal (Dapat diedit)
+├── config.yaml        # Konfigurasi aplikasi
+├── main.py            # Entry point
+└── pyproject.toml     # Packaging standar Python
 ```
 
 ## Instalasi & Penggunaan
 
+### 1. Setup Environment
 ```bash
-# Clone repository
+# Clone & Masuk direktori
 git clone https://github.com/hafourenai/webscanjust4me
 cd webscanjust4me
 
+<<<<<<< HEAD
 # Install dependencies
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+=======
+# Install dependencies (Rekomendasi)
+pip install -e .
+>>>>>>> 4462ddb (Last Commit)
 ```
 
-### Cara Menggunakan
+### 2. Cara Menjalankan Scanner
+Anda dapat menjalankan scanner dengan dua cara:
 
-```powershell
+#### **Metode A: Terinstal (Rekomendasi)**
+Jalankan langsung dari terminal setelah melakukan `pip install -e .` di atas:
+```bash
+honey-scanner <target_url> [options]
+```
+
+#### **Metode B: Tanpa Instalasi**
+Jalankan langsung melalui file `main.py`:
+```bash
 python main.py <target_url> [options]
 ```
 
-#### **1. Basic Vulnerability Scan**
+## Konfigurasi
+Anda dapat menyesuaikan perilaku scanner di `config.yaml`, seperti:
+- Jumlah thread default.
+- Batas kedalaman crawler.
+- Lokasi file payload.
+- Pengaturan retry dan anti-block.
+
+## Contoh Command
 ```bash
-# For learning/testing
-python main.py https://testphp.vulnweb.com
+# Scan dengan mode stealth & rate limit rendah
+honey-scanner https://target.com --stealth --rate 0.5
+
+# Scan agresif dengan banyak thread
+honey-scanner https://target.com --aggressive --threads 20
 ```
 
+<<<<<<< HEAD
 #### **2. Stealth Scan (Production Sites)**
 ```bash
 python main.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
@@ -82,8 +108,10 @@ python clean.py
 - `--proxy-file`: Path ke file list proxy.
 - `--use-tor`: Gunakan jaringan TOR.
 - `--rate`: Batasi request per detik (e.g., `--rate 1.0`).
+=======
+>>>>>>> 4462ddb (Last Commit)
 
 ---
 
 > [!IMPORTANT]
-> Gunakan tools ini hanya untuk tujuan edukasi dan pengujian keamanan legal. Penggunaan terhadap target tanpa izin adalah ilegal.
+> **Legal Disclaimer:** Gunakan tools ini hanya untuk tujuan edukasi dan pengujian keamanan yang sah secara hukum. Penyalahgunaan terhadap target tanpa izin tertulis adalah sepenuhnya tanggung jawab pengguna.

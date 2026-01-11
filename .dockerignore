@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.git
+.venv
+venv
+*.log
+scan_report_*
+.gitignore
+Dockerfile
+.dockerignore
+pyproject.toml
+LICENSE
+README.md

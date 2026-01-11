@@ -3,6 +3,7 @@ import sys
 import logging
 import os
 from honey_scanner.core.scanner import VulnScanner
+from honey_scanner.core.config import config
 
 # Setup logging
 logging.basicConfig(
@@ -33,13 +34,13 @@ def main():
     
     parser = argparse.ArgumentParser(description='Honey Modular Vulnerability Scanner')
     parser.add_argument('target', help='Target URL to scan')
-    parser.add_argument('-t', '--threads', type=int, default=15, help='Number of threads (default: 15)')
-    parser.add_argument('-d', '--depth', type=int, default=5, help='Crawl depth (default: 5)')
+    parser.add_argument('-t', '--threads', type=int, help=f'Number of threads (default: {config.get("scanning.default_threads", 15)})')
+    parser.add_argument('-d', '--depth', type=int, help=f'Crawl depth (default: {config.get("scanning.default_depth", 5)})')
     parser.add_argument('--aggressive', action='store_true', help='Enable aggressive mode')
     parser.add_argument('--stealth', action='store_true', help='Enable stealth mode')
     parser.add_argument('--proxy-file', help='Path to proxy list file')
     parser.add_argument('--use-tor', action='store_true', help='Use TOR network')
-    parser.add_argument('--rate', type=float, default=1.0, help='Requests per second (default: 1.0)')
+    parser.add_argument('--rate', type=float, help=f'Requests per second (default: {config.get("scanning.default_rate_limit", 1.0)})')
     
     args = parser.parse_args()
     
@@ -65,9 +66,7 @@ def main():
         scanner.crawl()
         
         print("[*] Phase 2: Vulnerability Testing...")
-        # In the modular version, we will call test methods from scanner
-        # For now, let's assume we implement a run_tests method in VulnScanner
-        # scanner.run_tests()
+        scanner.run_tests()
         
         print("[*] Phase 3: Generating Reports...")
         reports = scanner.generate_report()
