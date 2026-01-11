@@ -24,10 +24,6 @@
 git clone https://github.com/hafourenai/webscanjust4me
 cd webscanjust4me
 
-<<<<<<< HEAD
-=======
-
->>>>>>> da9074c (Last Commit)
 # Install dependencies
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
@@ -38,7 +34,7 @@ pip install -e .
 
 ```
 
-### 2. Cara Menjalankan Scanner
+### Cara Menjalankan Scanner
 Anda dapat menjalankan scanner dengan dua cara:
 
 #### **Metode A: Terinstal (Rekomendasi)**
@@ -70,7 +66,7 @@ honey-scanner https://target.com --aggressive --threads 20
 ```
 <<<<<<< HEAD
 
-#### **2. Stealth Scan (Production Sites)**
+#### **Stealth Scan (Production Sites)**
 =======
 #### **Stealth Scan (Production Sites)**
 >>>>>>> da9074c (Last Commit)
