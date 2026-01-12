@@ -1,97 +1,72 @@
 # 🍯 HONEY Vulnerability Scanner
 
-
-
 ## 📁 Struktur Project
-
 ```
 ├── honey_scanner/     # Paket modul utama
 │   ├── core/          # Engine (Scanner, Config, WAF Bypass)
 │   ├── detection/     # Verifikasi (SQLi, XSS, LFI, CSRF)
 │   ├── antiban/       # Anti-blocking (Proxy, Tor, Limiter)
-│   └── reporting/     # Multi-format reporter
-├── Payloads/          # Database payload lokal (Dapat diedit)
+│   ├── reporting/     # Multi-format reporter
+│   └── resources/     # Internal resources (Payloads, etc.)
+├── reports/           # Direktori output laporan (Otomatis)
+├── logs/              # Direktori log aplikasi (Otomatis)
 ├── config.yaml        # Konfigurasi aplikasi
-├── main.py            # Entry point
-└── pyproject.toml     # Packaging standar Python
+├── pyproject.toml     # Packaging standar Python
+└── Dockerfile         # Kontainerisasi siap produksi
 ```
 
 ## Instalasi & Penggunaan
 
+
 ### Setup Environment
+=======
+### 1. Lokal (Python)
 ```bash
-# Clone & Masuk direktori
-git clone https://github.com/hafourenai/webscanjust4me
-cd webscanjust4me
+# Install sebagai package lokal
+pip install .
 
-# Install dependencies
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Install dependencies (Rekomendasi)
-pip install -e .
-
-```
-
-### Cara Menjalankan Scanner
-Anda dapat menjalankan scanner dengan dua cara:
-
-#### **Metode A: Terinstal (Rekomendasi)**
-Jalankan langsung dari terminal setelah melakukan `pip install -e .` di atas:
-```bash
+# Jalankan scanner
 honey-scanner <target_url> [options]
 ```
 
-#### **Metode B: Tanpa Instalasi**
-Jalankan langsung melalui file `main.py`:
+### 2. Docker (Kontainer)
 ```bash
-python main.py <target_url> [options]
+# Build image
+docker build -t honey-scanner .
+
+# Jalankan scan (Laporan akan tersimpan di folder 'reports' lokal)
+docker run --rm -v ${PWD}/reports:/app/reports honey-scanner <target_url>
 ```
 
 ## Konfigurasi
-Anda dapat menyesuaikan perilaku scanner di `config.yaml`, seperti:
-- Jumlah thread default.
-- Batas kedalaman crawler.
-- Lokasi file payload.
-- Pengaturan retry dan anti-block.
+Anda dapat menyesuaikan perilaku scanner di `config.yaml` atau menggunakan **Environment Variables** (Sangat direkomendasikan untuk Docker/CI-CD):
+
+| Variabel Lingkungan | Contoh Nilai | Deskripsi |
+|--------------------|--------------|-----------|
+| `HONEY_SCANNING_THREADS` | `20` | Jumlah thread paralel |
+| `HONEY_SCANNING_TIMEOUT` | `15` | Timeout request dalam detik |
+| `HONEY_SCANNING_DEFAULT_RATE_LIMIT` | `2.0` | Request per detik |
 
 ## Contoh Command
-```bash
-# Scan dengan mode stealth & rate limit rendah
-honey-scanner https://target.com --stealth --rate 0.5
 
 # Scan agresif dengan banyak thread
 honey-scanner https://target.com --aggressive --threads 20
 ```
-
-#### **Stealth Scan (Production Sites)**
-=======
-#### **Stealth Scan (Production Sites)**
-
+#### **Standard Scan**
 ```bash
-python main.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
+honey-scanner http://target.com
 ```
 
-#### **Scan with Proxy Protection**
+#### **Stealth Scan (Produksi)**
 ```bash
-python main.py http://target.com --proxy-file proxies.txt --stealth --rate 0.5
-```
-#### **Maximum Anonymity (TOR + Proxies)**
-```bash
-# Start TOR
-sudo service tor start
-
-python main.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.2 -d 5
-
-# Stop TOR
-sudo service tor stop
+honey-scanner http://target.com --stealth --rate 0.5
 ```
 
-#### **Aggressive Bug Bounty Scan**
+#### **Anonymous Scan (TOR + Proxy)**
 ```bash
-python main.py http://target.com --aggressive --threads 20 --depth 10 --rate 2.0
+honey-scanner http://target.com --use-tor --proxy-file proxies.txt
 ```
+
 
 #### **High-Value Target (Cloudflare/WAF)**
 ```bash
@@ -109,9 +84,6 @@ python clean.py
 - `--proxy-file`: Path ke file list proxy.
 - `--use-tor`: Gunakan jaringan TOR.
 - `--rate`: Batasi request per detik (e.g., `--rate 1.0`).
-
-
-
 ---
 
 > [!IMPORTANT]

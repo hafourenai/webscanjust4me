@@ -4,16 +4,19 @@ import logging
 import os
 from honey_scanner.core.scanner import VulnScanner
 from honey_scanner.core.config import config
+from honey_scanner.core.paths import get_default_logs_dir, ensure_dirs
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('honey_scanner.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+def setup_logging(log_dir=None):
+    ensure_dirs()
+    log_path = (log_dir or get_default_logs_dir()) / 'honey_scanner.log'
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_path, encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
 
 def print_banner():
     banner = """
@@ -41,8 +44,12 @@ def main():
     parser.add_argument('--proxy-file', help='Path to proxy list file')
     parser.add_argument('--use-tor', action='store_true', help='Use TOR network')
     parser.add_argument('--rate', type=float, help=f'Requests per second (default: {config.get("scanning.default_rate_limit", 1.0)})')
+    parser.add_argument('--output-dir', help='Directory to save reports')
+    parser.add_argument('--log-dir', help='Directory to save logs')
     
     args = parser.parse_args()
+    
+    setup_logging(args.log_dir)
     
     target = args.target
     if not target.startswith(('http://', 'https://')):
@@ -58,7 +65,8 @@ def main():
         aggressive_mode=args.aggressive,
         proxy_file=args.proxy_file,
         use_tor=args.use_tor,
-        rate_limit=args.rate
+        rate_limit=args.rate,
+        output_dir=args.output_dir
     )
     
     try:

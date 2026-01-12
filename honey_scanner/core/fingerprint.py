@@ -39,7 +39,7 @@ class AdvancedFingerprinting:
                 'laravel': {
                     'headers': ['Set-Cookie: laravel_session'],
                     'body': ['laravel', 'csrf-token'],
-                    'errors': ['Illuminate\\', 'Laravel\\']
+                    'errors': ['Illuminate\\\\', 'Laravel\\\\']
                 },
                 'django': {
                     'headers': ['Set-Cookie: csrftoken', 'Set-Cookie: sessionid'],
@@ -114,7 +114,7 @@ class AdvancedFingerprinting:
                     'errors': ['Microsoft SQL', 'ODBC.*SQL Server', 'SQLServer JDBC']
                 },
                 'oracle': {
-                    'errors': ['ORA-\\d{5}', 'Oracle.*Driver', 'java.sql.SQLException']
+                    'errors': ['ORA-\\\\d{5}', 'Oracle.*Driver', 'java.sql.SQLException']
                 },
                 'mongodb': {
                     'errors': ['MongoError', 'MongoDB.*Exception']

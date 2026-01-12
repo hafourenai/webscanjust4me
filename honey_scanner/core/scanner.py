@@ -20,8 +20,8 @@ import xml.etree.ElementTree as ET
 # Modular imports
 from ..antiban.proxy import ProxyRotator, TorManager
 from ..antiban.limiter import RateLimiter, BlockDetector
-from ..core.engine import WAFBypassEngine, MLFalsePositiveReducer
-from ..core.fingerprint import AdvancedFingerprinting
+from .engine import WAFBypassEngine, MLFalsePositiveReducer
+from .fingerprint import AdvancedFingerprinting
 from ..detection.analyzers import BehavioralAnalyzer, ContextAnalyzer
 from ..detection.verifier import AutomatedVerifier
 from ..detection.csrf import CSRFDetector
@@ -30,8 +30,9 @@ from .config import config
 
 class VulnScanner:
     def __init__(self, target_url, max_threads=None, crawl_depth=None, stealth_mode=False, 
-                 aggressive_mode=False, proxy_file=None, use_tor=False, rate_limit=None):
+                 aggressive_mode=False, proxy_file=None, use_tor=False, rate_limit=None, output_dir=None):
         self.target_url = target_url
+        self.output_dir = output_dir
         self.max_threads = max_threads or config.get('scanning.default_threads', 15)
         self.crawl_depth = crawl_depth or config.get('scanning.default_depth', 5)
         self.stealth_mode = stealth_mode
@@ -122,9 +123,8 @@ class VulnScanner:
         self.lfi_payloads = []
         
         # Get base directory for payloads
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        payload_base_name = config.get('payloads.base_path', 'Payloads')
-        base_dir = os.path.join(project_root, payload_base_name)
+        from .paths import get_payloads_dir
+        base_dir = get_payloads_dir()
         
         # Load SQLi payloads
         try:
@@ -238,8 +238,12 @@ class VulnScanner:
             for a in soup.find_all('a', href=True):
                 full_url = urljoin(url, a['href']).split('#')[0].rstrip('/')
                 parsed = urlparse(full_url)
-                if parsed.netloc == self.base_domain:
+                # Relaxed domain check: allow subdomains
+                is_subdomain = parsed.netloc == self.base_domain or parsed.netloc.endswith('.' + self.base_domain)
+                if is_subdomain:
                     new_links.append(full_url)
+                else:
+                    logging.debug(f"Skipping out-of-scope URL: {full_url}")
             
             return new_links, depth
             
@@ -502,5 +506,5 @@ class VulnScanner:
             'end_time': datetime.now().isoformat(),
             'tech_stack': self.tech_stack_full
         }
-        reporter = EnhancedReporting(self.vulnerabilities, scan_info)
+        reporter = EnhancedReporting(self.vulnerabilities, scan_info, output_dir=self.output_dir)
         return reporter.generate_all_reports()

@@ -8,9 +8,15 @@ from collections import Counter
 class EnhancedReporting:
     """Enhanced reporting dengan multiple formats dan visualizations"""
     
-    def __init__(self, vulnerabilities, scan_info):
+    def __init__(self, vulnerabilities, scan_info, output_dir=None):
         self.vulnerabilities = vulnerabilities
         self.scan_info = scan_info
+        from ..core.paths import get_default_reports_dir
+        self.output_dir = output_dir or get_default_reports_dir()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+    def _get_filepath(self, filename):
+        return self.output_dir / filename
         
     def generate_all_reports(self):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -24,19 +30,21 @@ class EnhancedReporting:
     
     def generate_json_report(self, timestamp):
         filename = f"scan_report_{timestamp}.json"
+        filepath = self._get_filepath(filename)
         report_data = {
             'scan_info': self.scan_info,
             'vulnerabilities': self.vulnerabilities,
             'statistics': self.calculate_statistics(),
             'risk_assessment': self.calculate_risk_assessment()
         }
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
-        return filename
+        return str(filepath)
 
     def generate_csv_report(self, timestamp):
         filename = f"scan_report_{timestamp}.csv"
-        with open(filename, 'w', newline='', encoding='utf-8') as f:
+        filepath = self._get_filepath(filename)
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(['ID', 'Type', 'Severity', 'URL', 'Parameter', 'Confidence', 'Proof'])
             for vuln in self.vulnerabilities:
@@ -45,10 +53,11 @@ class EnhancedReporting:
                     vuln.get('url', ''), vuln.get('parameter', ''), f"{vuln.get('confidence', 0):.2%}",
                     str(vuln.get('proof', ''))[:100]
                 ])
-        return filename
+        return str(filepath)
 
     def generate_markdown_report(self, timestamp):
         filename = f"scan_report_{timestamp}.md"
+        filepath = self._get_filepath(filename)
         content = f"# Vulnerability Scan Report\n\nTarget: {self.scan_info.get('target', 'N/A')}\n" \
                   f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n" \
                   f"Duration: {self.scan_info.get('duration', 0):.2f}s\n\n"
@@ -60,23 +69,25 @@ class EnhancedReporting:
             v_type = v.get('type', v.get('vuln_type', 'Unknown'))
             v_level = v.get('level', 'Medium')
             content += f"### {v_type} ({v_level})\n- URL: {v['url']}\n- Parameter: {v.get('parameter', 'N/A')}\n- Proof: {v.get('proof', 'N/A')}\n\n"
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
-        return filename
+        return str(filepath)
 
     def generate_xml_report(self, timestamp):
         filename = f"scan_report_{timestamp}.xml"
+        filepath = self._get_filepath(filename)
         root = ET.Element('report')
         for vuln in self.vulnerabilities:
             v_elem = ET.SubElement(root, 'vulnerability')
             for k, v in vuln.items():
                 ET.SubElement(v_elem, k).text = str(v)
         tree = ET.ElementTree(root)
-        tree.write(filename, encoding='utf-8')
-        return filename
+        tree.write(filepath, encoding='utf-8')
+        return str(filepath)
 
     def generate_html_report_enhanced(self, timestamp):
         filename = f"scan_report_{timestamp}.html"
+        filepath = self._get_filepath(filename)
         stats = self.calculate_statistics()
         risk_info = self.calculate_risk_assessment()
         
@@ -197,9 +208,9 @@ class EnhancedReporting:
         </html>
         """
         
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_template)
-        return filename
+        return str(filepath)
 
     def calculate_statistics(self):
         stats = Counter(v.get('level', 'Low') for v in self.vulnerabilities)
