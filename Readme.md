@@ -67,11 +67,6 @@ honey-scanner http://target.com --stealth --rate 0.5
 honey-scanner http://target.com --use-tor --proxy-file proxies.txt
 ```
 
-
-#### **High-Value Target (Cloudflare/WAF)**
-```bash
-python main.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.1 --threads 3 -d 3
-```
 #### **Clean**
 ```bash
 python clean.py

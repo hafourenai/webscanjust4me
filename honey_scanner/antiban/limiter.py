@@ -64,6 +64,9 @@ class BlockDetector:
             if response.status_code in [403, 429, 503]:
                 is_blocked = True
                 reason = f"HTTP {response.status_code}"
+                
+            if response.status_code == 200:
+                return False, None
             
             block_indicators = ['captcha', 'recaptcha', 'cloudflare', 
                               'access denied', 'rate limit', 'too many requests']

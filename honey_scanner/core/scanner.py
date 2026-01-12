@@ -41,6 +41,7 @@ class VulnScanner:
         
         # Requests configuration
         self.timeout = config.get('scanning.timeout', 10)
+        self.ua = UserAgent()
         
         # Components
         self.proxy_rotator = ProxyRotator()
@@ -56,6 +57,7 @@ class VulnScanner:
         self.session = requests.Session()
         self.session.verify = False
         requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        self.session.headers.update({'User-Agent': self.ua.random})
         
         if self.use_proxies:
             self._setup_proxies(use_tor)
@@ -68,7 +70,7 @@ class VulnScanner:
         self.ml_reducer = MLFalsePositiveReducer()
         self.fingerprinter = AdvancedFingerprinting(self.session)
         
-        self.ua = UserAgent()
+
         self.visited_urls = set()
         self.discovered_urls = set()
         self.vulnerabilities = []
@@ -235,6 +237,16 @@ class VulnScanner:
             self._extract_forms(soup, url)
             
             new_links = []
+            
+            # Attempt to extract links from JS files (SPA support)
+            try:
+                js_links = self._extract_js_links(soup, url)
+                if js_links:
+                    logging.info(f"Extracted {len(js_links)} links from JS files at {url}")
+                    new_links.extend(js_links)
+            except Exception as e:
+                logging.debug(f"JS extraction error: {e}")
+
             for a in soup.find_all('a', href=True):
                 full_url = urljoin(url, a['href']).split('#')[0].rstrip('/')
                 parsed = urlparse(full_url)
@@ -280,6 +292,50 @@ class VulnScanner:
             if form_details['inputs']:
                 self.forms.append(form_details)
                 logging.debug(f"Found form: {form_details['action']} with {len(form_details['inputs'])} inputs")
+
+    def _extract_js_links(self, soup, page_url):
+        """Extract links from JavaScript files referenced in the page"""
+        js_links = set()
+        scripts = soup.find_all('script', src=True)
+        
+        for script in scripts:
+            src = script['src']
+            full_js_url = urljoin(page_url, src)
+            
+            # Only scan JS files on the same domain or subdomain
+            parsed_js = urlparse(full_js_url)
+            is_valid_domain = parsed_js.netloc == self.base_domain or parsed_js.netloc.endswith('.' + self.base_domain)
+            
+            if is_valid_domain:
+                try:
+                    # We use a separate request here
+                    # Note: We don't recurse infinitely; just getting links
+                    response = self.safe_request('get', full_js_url, timeout=5)
+                    if response:
+                        content = response.text
+                        # Regex to find URLs and paths
+                        # Matches strings inside quotes that look like paths or URLs
+                        # Group 1 is the content
+                        matches = re.findall(r'(?:["\'])((?:https?://[^"\'\s<>]+)|(?:/[a-zA-Z0-9_][a-zA-Z0-9_\-/.]*))(?:["\'])', content)
+                        
+                        for match in matches:
+                            # Filter out common false positives
+                            if match.lower() in ['/','//', 'application/json', 'text/javascript']: continue
+                            if match.startswith('//'): continue # skip protocol relative comments mostly
+                            
+                            if match.startswith('http'):
+                                full_url = match
+                            else:
+                                full_url = urljoin(page_url, match)
+                                
+                            parsed = urlparse(full_url)
+                            is_subdomain = parsed.netloc == self.base_domain or parsed.netloc.endswith('.' + self.base_domain)
+                            
+                            if is_subdomain:
+                                js_links.add(full_url)
+                except Exception as e:
+                    logging.debug(f"Error parsing JS {full_js_url}: {e}")
+        return list(js_links)
 
     def test_sqli(self):
         """Test for SQL Injection vulnerabilities concurrently"""
