@@ -26,7 +26,7 @@
 pip install .
 
 # Jalankan scanner
-honey-scanner <target_url> [options]
+python honey.py <target_url> [options]
 ```
 
 ### 2. Docker (Kontainer)
@@ -47,25 +47,43 @@ Anda dapat menyesuaikan perilaku scanner di `config.yaml` atau menggunakan **Env
 | `HONEY_SCANNING_TIMEOUT` | `15` | Timeout request dalam detik |
 | `HONEY_SCANNING_DEFAULT_RATE_LIMIT` | `2.0` | Request per detik |
 
-## Contoh Command
-
-# Scan agresif dengan banyak thread
-honey-scanner https://target.com --aggressive --threads 20
-```
-#### **Standard Scan**
+### 1. Basic Vulnerability Scan
 ```bash
-honey-scanner http://target.com
+# For learning/testing
+python honey.py https://testphp.vulnweb.com
 ```
 
-#### **Stealth Scan (Produksi)**
+### 2. Stealth Scan (Production Sites)
 ```bash
-honey-scanner http://target.com --stealth --rate 0.5
+python honey.py http://target.com --stealth --depth 7 --threads 10 --rate 0.5
 ```
 
-#### **Anonymous Scan (TOR + Proxy)**
+### 3. Scan with Proxy Protection
 ```bash
-honey-scanner http://target.com --use-tor --proxy-file proxies.txt
+python honey.py http://target.com --proxy-file proxies.txt --stealth --rate 0.5
 ```
+
+### 4. Maximum Anonymity (TOR + Proxies)
+```bash
+# Start TOR
+sudo service tor start
+
+python honey.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.2 -d 5
+
+# Stop TOR
+sudo service tor stop
+```
+
+### 5. Aggressive Bug Bounty Scan
+```bash
+python honey.py http://target.com --aggressive --threads 20 --depth 10 --rate 2.0
+```
+
+### 6. High-Value Target (Cloudflare/WAF)
+```bash
+python honey.py http://target.com --proxy-file proxies.txt --use-tor --stealth --rate 0.1 --threads 3 -d 3
+```
+
 
 #### **Clean**
 ```bash

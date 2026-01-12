@@ -23,7 +23,7 @@ class ConfigLoader:
                 logging.error(f"Failed to load config.yaml at {config_path}: {e}")
                 self._config = {}
         else:
-            logging.warning("config.yaml not found in standard locations, using defaults")
+            logging.info("config.yaml not found, using internal defaults")
             self._config = {}
 
     def get(self, key_path, default=None):

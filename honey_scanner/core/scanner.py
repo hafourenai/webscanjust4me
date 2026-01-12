@@ -80,7 +80,21 @@ class VulnScanner:
         self.tech_stack_full = {}
         self.detected_waf = None
         
+        # Common parameters to fuzz if none found
+        
+        # Common parameters to fuzz if none found
+        self.common_params = ['id', 'user', 'user_id', 'username', 'q', 'search', 'query', 'file', 'path', 'page', 'dir', 'view', 'class', 'url', 'redirect', 'return', 'name', 'email', 'cat', 'category']
+        
+        self.shutdown_event = threading.Event()
         self.init_payloads()
+
+    def _log(self, message, level='info'):
+        """Dual logging: Print to console and log to file"""
+        print(message, flush=True)
+        if level == 'info': logging.info(message)
+        elif level == 'warning': logging.warning(message)
+        elif level == 'error': logging.error(message)
+        elif level == 'debug': logging.debug(message)
         
     def _setup_proxies(self, use_tor):
         if use_tor and self.tor_manager and self.tor_manager.tor_available:
@@ -89,6 +103,7 @@ class VulnScanner:
             self.session.proxies = self.proxy_rotator.get_proxy()
 
     def safe_request(self, method='get', url=None, **kwargs):
+        if self.shutdown_event.is_set(): return None
         self.rate_limiter.wait()
         retries = 3
         for i in range(retries):
@@ -188,38 +203,61 @@ class VulnScanner:
     def crawl(self, url=None):
         """Concurrent crawler to discover endpoints"""
         current_url = url or self.target_url
-        print(f"[*] Starting crawl on {current_url} (depth: {self.crawl_depth})")
+        self._log(f"[*] Starting crawl on {current_url} (depth: {self.crawl_depth})")
         
         # Initial fingerprinting
-        self.tech_stack_full = self.fingerprinter.comprehensive_fingerprint(current_url)
-        if self.tech_stack_full.get('waf'):
-            self.detected_waf = self.tech_stack_full['waf'][0]
-            logging.info(f"WAF detected: {self.detected_waf}")
+        try:
+            self.tech_stack_full = self.fingerprinter.comprehensive_fingerprint(current_url)
+            if self.tech_stack_full.get('waf'):
+                self.detected_waf = self.tech_stack_full['waf'][0]
+                self._log(f"[*] WAF detected: {self.detected_waf}", 'warning')
+        except KeyboardInterrupt:
+            self.shutdown_event.set()
+            return
+        except Exception: pass
 
         queue = [(current_url, 0)]
         self.discovered_urls.add(current_url)
         
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+        executor = ThreadPoolExecutor(max_workers=self.max_threads)
+        
+        try:
             while queue and len(self.visited_urls) < 100:  # Limit unique pages for safety
+                if self.shutdown_event.is_set(): break
+                
                 # Process current level
                 current_batch = queue[:self.max_threads * 2]
                 queue = queue[self.max_threads * 2:]
                 
                 futures = []
                 for url, depth in current_batch:
+                    if self.shutdown_event.is_set(): break
                     if url not in self.visited_urls and depth <= self.crawl_depth:
                         futures.append(executor.submit(self._crawl_worker, url, depth))
                 
                 for future in as_completed(futures):
-                    new_links, depth = future.result()
-                    if depth < self.crawl_depth:
-                        for link in new_links:
-                            with self.visited_lock:
-                                if link not in self.discovered_urls:
-                                    self.discovered_urls.add(link)
-                                    queue.append((link, depth + 1))
-        
-        print(f"[+] Crawl complete. Discovered {len(self.discovered_urls)} URLs.")
+                    if self.shutdown_event.is_set(): break
+                    try:
+                        new_links, depth = future.result()
+                        if depth < self.crawl_depth:
+                            for link in new_links:
+                                with self.visited_lock:
+                                    if link not in self.discovered_urls:
+                                        self.discovered_urls.add(link)
+                                        queue.append((link, depth + 1))
+                    except KeyboardInterrupt:
+                        self.shutdown_event.set()
+                        raise
+                    except Exception: continue
+                    
+        except KeyboardInterrupt:
+            self._log("[!] Crawl interrupted by user.", 'warning')
+            self.shutdown_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
+            return
+
+        executor.shutdown(wait=True)
+        self._log(f"[+] Crawl complete. Discovered {len(self.discovered_urls)} URLs.")
 
     def _crawl_worker(self, url, depth):
         """Worker function for concurrent crawling"""
@@ -242,7 +280,8 @@ class VulnScanner:
             try:
                 js_links = self._extract_js_links(soup, url)
                 if js_links:
-                    logging.info(f"Extracted {len(js_links)} links from JS files at {url}")
+                if js_links:
+                    self._log(f"[*] Extracted {len(js_links)} links from JS files at {url}")
                     new_links.extend(js_links)
             except Exception as e:
                 logging.debug(f"JS extraction error: {e}")
@@ -252,6 +291,7 @@ class VulnScanner:
                 parsed = urlparse(full_url)
                 # Relaxed domain check: allow subdomains
                 is_subdomain = parsed.netloc == self.base_domain or parsed.netloc.endswith('.' + self.base_domain)
+                
                 if is_subdomain:
                     new_links.append(full_url)
                 else:
@@ -339,30 +379,55 @@ class VulnScanner:
 
     def test_sqli(self):
         """Test for SQL Injection vulnerabilities concurrently"""
-        print("[*] Testing for SQL Injection...")
+        if self.shutdown_event.is_set(): return
+        self._log("[*] Testing for SQL Injection...")
         tested_count = 0
         
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            futures = []
+        executor = ThreadPoolExecutor(max_workers=self.max_threads)
+        futures = []
+        
+        try:
             # Test URL parameters
             for url in self.discovered_urls:
+                if self.shutdown_event.is_set(): break
                 futures.append(executor.submit(self._test_sqli_url, url))
             
             # Test forms
             for form in self.forms:
+                if self.shutdown_event.is_set(): break
                 futures.append(executor.submit(self._test_sqli_form, form))
                 
             for future in as_completed(futures):
-                tested_count += future.result()
-        
-        print(f"[+] SQLi testing complete. Tested {tested_count} injection points.")
+                if self.shutdown_event.is_set(): break
+                try:
+                    tested_count += future.result()
+                except KeyboardInterrupt:
+                    self.shutdown_event.set()
+                    raise
+                except Exception: continue
+        except KeyboardInterrupt:
+            self._log("[!] SQLi tests interrupted.", 'warning')
+            self.shutdown_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
+            return
+
+        executor.shutdown(wait=True)
+        self._log(f"[+] SQLi testing complete. Tested {tested_count} injection points.")
 
     def _test_sqli_url(self, url):
+        if self.shutdown_event.is_set(): return 0
         points = 0
         parsed = urlparse(url)
-        if not parsed.query: return 0
+        self._log(f"[*] Testing SQLi on: {url}")
         
-        params = dict(urllib.parse.parse_qsl(parsed.query))
+        params = {}
+        if parsed.query:
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+        
+        # If no params found, try fuzzing common ones
+        if not params:
+            params = {k: '' for k in self.common_params}
+            
         for param in params.keys():
             points += 1
             for payload_type, payloads in self.sqli_payloads.items():
@@ -413,27 +478,52 @@ class VulnScanner:
 
     def test_xss(self):
         """Test for Cross-Site Scripting vulnerabilities concurrently"""
-        print("[*] Testing for XSS...")
+        if self.shutdown_event.is_set(): return
+        self._log("[*] Testing for XSS...")
         tested_count = 0
         
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            futures = []
+        executor = ThreadPoolExecutor(max_workers=self.max_threads)
+        futures = []
+        
+        try:
             for url in self.discovered_urls:
+                if self.shutdown_event.is_set(): break
                 futures.append(executor.submit(self._test_xss_url, url))
             for form in self.forms:
+                if self.shutdown_event.is_set(): break
                 futures.append(executor.submit(self._test_xss_form, form))
                 
             for future in as_completed(futures):
-                tested_count += future.result()
-        
-        print(f"[+] XSS testing complete. Tested {tested_count} injection points.")
+                if self.shutdown_event.is_set(): break
+                try:
+                    tested_count += future.result()
+                except KeyboardInterrupt:
+                    self.shutdown_event.set()
+                    raise
+                except Exception: continue
+        except KeyboardInterrupt:
+            self._log("[!] XSS tests interrupted.", 'warning')
+            self.shutdown_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
+            return
+
+        executor.shutdown(wait=True)
+        self._log(f"[+] XSS testing complete. Tested {tested_count} injection points.")
 
     def _test_xss_url(self, url):
+        if self.shutdown_event.is_set(): return 0
         points = 0
         parsed = urlparse(url)
-        if not parsed.query: return 0
+        self._log(f"[*] Testing XSS on: {url}")
         
-        params = dict(urllib.parse.parse_qsl(parsed.query))
+        params = {}
+        if parsed.query:
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+            
+        # If no params found, try fuzzing common ones
+        if not params:
+            params = {k: '' for k in self.common_params[:10]} # Limit for XSS to avoid noise
+            
         for param in params.keys():
             points += 1
             for payload in self.xss_payloads[:10]:
@@ -479,27 +569,49 @@ class VulnScanner:
         return False
 
     def test_lfi(self):
-        """Test for Local File Inclusion vulnerabilities concurrently"""
-        print("[*] Testing for LFI...")
+        """Test for LFI vulnerabilities concurrently"""
+        if self.shutdown_event.is_set(): return
+        self._log("[*] Testing for LFI...")
         tested_count = 0
         
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            futures = []
+        executor = ThreadPoolExecutor(max_workers=self.max_threads)
+        futures = []
+        
+        try:
             for url in self.discovered_urls:
+                if self.shutdown_event.is_set(): break
                 futures.append(executor.submit(self._test_lfi_url, url))
             for future in as_completed(futures):
-                tested_count += future.result()
-        
-        print(f"[+] LFI testing complete. Tested {tested_count} injection points.")
+                if self.shutdown_event.is_set(): break
+                try:
+                    tested_count += future.result()
+                except KeyboardInterrupt:
+                    self.shutdown_event.set()
+                    raise
+                except Exception: continue
+        except KeyboardInterrupt:
+            self._log("[!] LFI tests interrupted.", 'warning')
+            self.shutdown_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
+            return
+            
+        executor.shutdown(wait=True)
+        self._log(f"[+] LFI testing complete. Tested {tested_count} injection points.")
 
     def _test_lfi_url(self, url):
+        if self.shutdown_event.is_set(): return 0
         points = 0
+        self._log(f"[*] Testing LFI on: {url}")
         file_params = ['file', 'page', 'path', 'doc', 'document', 'folder', 'root', 'pg', 'style', 
                       'pdf', 'template', 'php_path', 'document_root']
         parsed = urlparse(url)
-        if not parsed.query: return 0
         
-        params = dict(urllib.parse.parse_qsl(parsed.query))
+        params = {}
+        if parsed.query:
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+        else:
+            params = {k: '' for k in file_params}
+            
         for param in params.keys():
             if self.aggressive_mode or any(fp in param.lower() for fp in file_params):
                 points += 1
@@ -522,11 +634,11 @@ class VulnScanner:
 
     def run_tests(self):
         """Main test orchestration method"""
-        print("\n[*] Starting Vulnerability Testing Phase...")
-        print(f"[*] Discovered {len(self.discovered_urls)} URLs and {len(self.forms)} forms\n")
+        self._log("\n[*] Starting Vulnerability Testing Phase...")
+        self._log(f"[*] Discovered {len(self.discovered_urls)} URLs and {len(self.forms)} forms\n")
         
         if not self.discovered_urls and not self.forms:
-            print("[!] No testable endpoints found. Increase crawl depth or check target accessibility.")
+            self._log("[!] No testable endpoints found. Increase crawl depth or check target accessibility.", 'warning')
             return
         
         # Run all tests
@@ -536,14 +648,15 @@ class VulnScanner:
         
         # Test CSRF if forms found
         if self.forms:
-            print("[*] Testing for CSRF...")
-            try:
-                csrf_vulns = self.csrf_detector.detect_csrf_issues()
-                print(f"[+] CSRF testing complete. Found {len(csrf_vulns)} potential issues.")
-            except Exception as e:
-                logging.error(f"CSRF testing error: {e}")
+            if not self.shutdown_event.is_set():
+                self._log("[*] Testing for CSRF...")
+                try:
+                    csrf_vulns = self.csrf_detector.detect_csrf_issues()
+                    self._log(f"[+] CSRF testing complete. Found {len(csrf_vulns)} potential issues.")
+                except Exception as e:
+                    logging.error(f"CSRF testing error: {e}")
         
-        print(f"\n[+] Testing complete. Found {len(self.vulnerabilities)} vulnerabilities.")
+        self._log(f"\n[+] Testing complete. Found {len(self.vulnerabilities)} vulnerabilities.")
 
     def report_vulnerability(self, **kwargs):
         # Ensure level is consistent with severity/risk for reporting
@@ -553,7 +666,7 @@ class VulnScanner:
             kwargs['level'] = 'Medium'
             
         self.vulnerabilities.append(kwargs)
-        logging.info(f"VULNERABILITY FOUND: {kwargs['vuln_type']} at {kwargs['url']} [Risk: {kwargs['level']}]")
+        self._log(f"VULNERABILITY FOUND: {kwargs['vuln_type']} at {kwargs['url']} [Risk: {kwargs['level']}]", 'warning')
 
     def generate_report(self):
         scan_info = {
