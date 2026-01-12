@@ -2,25 +2,23 @@
 
 ## 📁 Struktur Project
 ```
-├── honey_scanner/     # Paket modul utama
-│   ├── core/          # Engine (Scanner, Config, WAF Bypass)
-│   ├── detection/     # Verifikasi (SQLi, XSS, LFI, CSRF)
-│   ├── antiban/       # Anti-blocking (Proxy, Tor, Limiter)
-│   ├── reporting/     # Multi-format reporter
-│   └── resources/     # Internal resources (Payloads, etc.)
-├── reports/           # Direktori output laporan (Otomatis)
-├── logs/              # Direktori log aplikasi (Otomatis)
-├── config.yaml        # Konfigurasi aplikasi
-├── pyproject.toml     # Packaging standar Python
-└── Dockerfile         # Kontainerisasi siap produksi
+├── honey_scanner/    
+│   ├── core/          
+│   ├── detection/     
+│   ├── antiban/       
+│   ├── reporting/     
+│   └── resources/     
+├── reports/        
+├── logs/              
+├── config.yaml        
+├── pyproject.toml              
 ```
 
 ## Instalasi & Penggunaan
 
 
 ### Setup Environment
-=======
-### 1. Lokal (Python)
+### Lokal (Python)
 ```bash
 # Install sebagai package lokal
 pip install .
@@ -28,24 +26,6 @@ pip install .
 # Jalankan scanner
 python honey.py <target_url> [options]
 ```
-
-### 2. Docker (Kontainer)
-```bash
-# Build image
-docker build -t honey-scanner .
-
-# Jalankan scan (Laporan akan tersimpan di folder 'reports' lokal)
-docker run --rm -v ${PWD}/reports:/app/reports honey-scanner <target_url>
-```
-
-## Konfigurasi
-Anda dapat menyesuaikan perilaku scanner di `config.yaml` atau menggunakan **Environment Variables** (Sangat direkomendasikan untuk Docker/CI-CD):
-
-| Variabel Lingkungan | Contoh Nilai | Deskripsi |
-|--------------------|--------------|-----------|
-| `HONEY_SCANNING_THREADS` | `20` | Jumlah thread paralel |
-| `HONEY_SCANNING_TIMEOUT` | `15` | Timeout request dalam detik |
-| `HONEY_SCANNING_DEFAULT_RATE_LIMIT` | `2.0` | Request per detik |
 
 ### 1. Basic Vulnerability Scan
 ```bash
