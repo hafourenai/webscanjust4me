@@ -280,7 +280,6 @@ class VulnScanner:
             try:
                 js_links = self._extract_js_links(soup, url)
                 if js_links:
-                if js_links:
                     self._log(f"[*] Extracted {len(js_links)} links from JS files at {url}")
                     new_links.extend(js_links)
             except Exception as e:
